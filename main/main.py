@@ -12,7 +12,7 @@ from dataset import EEGDataset
 device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if torch.backends.mps.is_available() else
                           "cpu")
-base_path = '/Users/cirilla/Documents/Code/ml/eeg/files'
+base_path = '/Users/cirilla/Documents/Code/ml/eeg/files Copy'
 def train(model, train_loader, optimizer, criterion, device):
     model.train()
     train_loss = 0
@@ -122,12 +122,12 @@ def main():
     train_loader, val_loader, test_loader = get_loaders(epoch=epochs, batch_size=batch_size, sfreq=sfreq)
 
     train_model(epochs,batch_size,model,train_loader,val_loader)
-    test_model(model,test_loader,nn.CrossEntropyLoss(),device)
+    # test_model(model,test_loader,nn.CrossEntropyLoss(),device)
     # Save model
     torch.save(model.state_dict(), 'eegnet.pth')
     # Load model
-    # model.load_state_dict(torch.load('eegnet.pth'))
-    # model.eval()
+    model.load_state_dict(torch.load('eegnet.pth'))
+    test_model(model,test_loader,nn.CrossEntropyLoss(),device)
 
 if __name__ == '__main__':
     main()

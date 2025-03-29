@@ -43,7 +43,7 @@ class EEGDataset(Dataset):
             if desc not in selected_event_id:
                 continue
 
-            label = selected_event_id[desc]
+            label = selected_event_id[desc]-1
             start_sample = int(onset * self.sfreq)
             end_sample = start_sample + int(self.duration * self.sfreq)
 
