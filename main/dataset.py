@@ -1,18 +1,11 @@
 import os
 from typing import Optional
-
-import chardet
 import torch
 import numpy as np
 import mne
-
 from torch.utils.data import Dataset
-def detect_encoding(filepath):
-    with open(filepath, 'rb') as f:
-        raw_data = f.read(10000)  # read first 10KB
-        result = chardet.detect(raw_data)
-        print(f"Detected encoding: {result['encoding']}")
-        return result['encoding']
+
+
 class EEGDataset(Dataset):
     def __init__(self, data_dir, sfreq=128, duration=4.0, transform=None,fraction=1.0, seed=42):
         self.data_dir = data_dir

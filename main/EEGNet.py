@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
-from torchgen.executorch.api.et_cpp import return_names
 
 device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if torch.backends.mps.is_available() else

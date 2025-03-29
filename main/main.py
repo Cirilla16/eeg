@@ -1,23 +1,11 @@
 import numpy as np
 from typing import Optional, Tuple, Dict
-
-import numpy.typing as npt
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, random_split, Subset
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
-import torch.nn.functional as F
-import os
-from typing import Optional
-
-import chardet
-
-import mne
-
-from torch.utils.data import Dataset
 
 from EEGNet import EEGNet
 from dataset import EEGDataset
