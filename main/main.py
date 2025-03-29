@@ -24,6 +24,7 @@ from dataset import EEGDataset
 device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if torch.backends.mps.is_available() else
                           "cpu")
+base_path = '/Users/cirilla/Documents/Code/ml/eeg/files'
 def train(model, train_loader, optimizer, criterion, device):
     model.train()
     train_loss = 0
@@ -100,7 +101,7 @@ def test_model(model,test_loader,criterion,device):
     print(f"\nTest Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
 
 def get_loaders(epoch: int = 32, batch_size: int = 64, sfreq: int = 128) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    base_path = '/Users/cirilla/Documents/Code/ml/eeg/files copy'
+
     dataset = EEGDataset(data_dir=base_path, sfreq=sfreq, duration=1.0)
 
     # Step 1: Create indices for the full dataset
