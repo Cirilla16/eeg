@@ -2,17 +2,75 @@ import numpy as np
 from typing import Optional, Tuple, Dict
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, random_split, Subset
-
+from sklearn.metrics import mean_squared_error
+import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
+import matplotlib.pyplot as plt
 from EEGNet import EEGNet
 from dataset import EEGDataset
 device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if torch.backends.mps.is_available() else
                           "cpu")
-base_path = '/Users/cirilla/Documents/Code/ml/eeg/files Copy'
+base_path = '/Users/cirilla/Documents/Code/ml/eeg/files copy'
+def plot_metrics(history):
+    epochs = range(1, len(history['train_loss']) + 1)
+
+    plt.figure(figsize=(16, 10))
+
+    # Loss
+    plt.subplot(2, 2, 1)
+    plt.plot(epochs, history['train_loss'], label='Train Loss')
+    plt.plot(epochs, history['val_loss'], label='Val Loss')
+    plt.title('Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    # Accuracy
+    plt.subplot(2, 2, 2)
+    plt.plot(epochs, history['val_acc'], label='Val Accuracy', color='green')
+    plt.title('Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+
+    # MSE
+    plt.subplot(2, 2, 3)
+    plt.plot(epochs, history['val_mse'], label='Val MSE', color='orange')
+    plt.title('Validation MSE')
+    plt.xlabel('Epoch')
+    plt.ylabel('MSE')
+    plt.legend()
+
+    # RMSE
+    plt.subplot(2, 2, 4)
+    plt.plot(epochs, history['val_rmse'], label='Val RMSE', color='red')
+    plt.title('Validation RMSE')
+    plt.xlabel('Epoch')
+    plt.ylabel('RMSE')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+def plot_test_metrics(test_metrics: Dict[str, float]):
+    labels = list(test_metrics.keys())
+    values = list(test_metrics.values())
+
+    plt.figure(figsize=(8, 5))
+    bars = plt.bar(labels, values, color=['skyblue', 'lightgreen', 'orange', 'salmon'])
+    plt.title("Test Set Metrics")
+    plt.ylabel("Score")
+    plt.ylim(0, max(values) * 1.2)
+
+    # Add value labels on top
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, height, f"{height:.3f}", ha='center', va='bottom')
+
+    plt.tight_layout()
+    plt.show()
 def train(model, train_loader, optimizer, criterion, device):
     model.train()
     train_loss = 0
@@ -40,6 +98,10 @@ def evaluate(model, val_loader, criterion, device):
     val_loss = 0
     correct = 0
     total = 0
+
+    all_preds = []
+    all_targets = []
+
     with torch.no_grad():
         for X, y in val_loader:
             X, y = X.to(device), y.to(device)
@@ -50,10 +112,17 @@ def evaluate(model, val_loader, criterion, device):
             _, predicted = torch.max(outputs, 1)
             correct += (predicted == y).sum().item()
             total += y.size(0)
+
+            all_preds.extend(predicted.cpu().numpy())
+            all_targets.extend(y.cpu().numpy())
+
     epoch_loss = val_loss / total
     epoch_acc = correct / total
-    return epoch_loss, epoch_acc
-def train_model(epochs,batch_size,model,train_loader,val_loader,patience=5):
+    mse = mean_squared_error(all_targets, all_preds)
+    rmse = math.sqrt(mse)
+
+    return epoch_loss, epoch_acc, mse, rmse
+def train_model(epochs, batch_size, model, train_loader, val_loader, patience=5):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
 
@@ -61,14 +130,30 @@ def train_model(epochs,batch_size,model,train_loader,val_loader,patience=5):
     best_model_state = None
     patience_counter = 0
 
+    history = {
+        'train_loss': [],
+        'val_loss': [],
+        'val_acc': [],
+        'val_mse': [],
+        'val_rmse': []
+    }
+
     for epoch in range(epochs):
         train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        val_loss, val_acc, val_mse, val_rmse = evaluate(model, val_loader, criterion, device)
+
+        # Log values
+        history['train_loss'].append(train_loss)
+        history['val_loss'].append(val_loss)
+        history['val_acc'].append(val_acc)
+        history['val_mse'].append(val_mse)
+        history['val_rmse'].append(val_rmse)
 
         print(f"Epoch {epoch+1}/{epochs}")
         print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
-        print(f"  Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f}")
-        # Early Stopping Check
+        print(f"  Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f} | MSE: {val_mse:.4f} | RMSE: {val_rmse:.4f}")
+
+        # Early stopping
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_model_state = model.state_dict()
@@ -79,14 +164,25 @@ def train_model(epochs,batch_size,model,train_loader,val_loader,patience=5):
             if patience_counter >= patience:
                 print("Early stopping triggered.")
                 # break
-    # Load best model state if available
+
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
         print("Best model weights restored.")
 
-def test_model(model,test_loader,criterion,device):
-    test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+    return history
+
+def test_model(model, test_loader, criterion, device):
+    test_loss, test_acc, test_mse, test_rmse = evaluate(model, test_loader, criterion, device)
+
     print(f"\nTest Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
+    print(f"Test MSE: {test_mse:.4f} | Test RMSE: {test_rmse:.4f}")
+
+    return {
+        'Test Loss': test_loss,
+        'Test Accuracy': test_acc,
+        'Test MSE': test_mse,
+        'Test RMSE': test_rmse
+    }
 
 def get_loaders(epoch: int = 32, batch_size: int = 64, sfreq: int = 128) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
@@ -115,19 +211,25 @@ def get_loaders(epoch: int = 32, batch_size: int = 64, sfreq: int = 128) -> Tupl
 
 
 def main():
-    sfreq=128
-    model = EEGNet(num_classes=3,sfreq=sfreq).to(device)
+    sfreq = 128
+    model = EEGNet(num_classes=3, sfreq=sfreq).to(device)
     epochs = 32
     batch_size = 64
     train_loader, val_loader, test_loader = get_loaders(epoch=epochs, batch_size=batch_size, sfreq=sfreq)
 
-    train_model(epochs,batch_size,model,train_loader,val_loader)
-    # test_model(model,test_loader,nn.CrossEntropyLoss(),device)
-    # Save model
+    history = train_model(epochs, batch_size, model, train_loader, val_loader)
+    plot_metrics(history)  # 👈 add this line
+
     torch.save(model.state_dict(), 'eegnet.pth')
-    # Load model
-    model.load_state_dict(torch.load('eegnet.pth'))
-    test_model(model,test_loader,nn.CrossEntropyLoss(),device)
+    # model.load_state_dict(torch.load('eegnet.pth'))
+    test_metrics = test_model(model, test_loader, nn.CrossEntropyLoss(), device)
+    plot_test_metrics(test_metrics)
 
 if __name__ == '__main__':
-    main()
+    m={
+        'Test Loss': 0.8410,
+        'Test Accuracy': 0.7015,
+        'Test MSE': 0.6078,
+        'Test RMSE': 0.7786
+    }
+    plot_test_metrics(m)
