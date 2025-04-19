@@ -12,7 +12,7 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 from EEGNet import EEGNet
 from dataset import EEGDataset
-from main.backup.cstm import CNN_LSTM
+from main.cstm import CNN_LSTM
 
 device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if torch.backends.mps.is_available() else
@@ -238,7 +238,7 @@ class TrainEEGNetModel(TrainModel):
         history = self.train_model(epochs, batch_size, model, train_loader, val_loader)
         self.plot_metrics(history)  # 👈 add this line
 
-        torch.save(model.state_dict(), 'eegnet.pth')
+        torch.save(model.state_dict(), '../eegnet.pth')
         # model.load_state_dict(torch.load('eegnet.pth'))
         test_metrics = self.test_model(model, test_loader, nn.CrossEntropyLoss(), device)
         self.plot_test_metrics(test_metrics)
@@ -253,7 +253,7 @@ class TrainCSTMModel(TrainModel):
         history = self.train_model(epochs, batch_size, model, train_loader, val_loader)
         self.plot_metrics(history)  # 👈 add this line
 
-        torch.save(model.state_dict(), 'eegnet.pth')
+        torch.save(model.state_dict(), '../eegnet.pth')
         # model.load_state_dict(torch.load('eegnet.pth'))
         test_metrics = self.test_model(model, test_loader, nn.CrossEntropyLoss(), device)
         self.plot_test_metrics(test_metrics)
