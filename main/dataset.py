@@ -36,7 +36,7 @@ class EEGDataset(Dataset):
         events, event_id = mne.events_from_annotations(raw)
         if event_labels is None:
             event_labels = list(event_id.keys())
-            print(event_labels)
+            # print(event_labels)
 
         selected_event_id = {label: event_id[label] for label in event_labels}
         for desc, onset, dur in zip(annotations.description, annotations.onset, annotations.duration):

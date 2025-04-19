@@ -1,16 +1,10 @@
-import numpy as np
-from typing import Tuple, Dict
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Subset
-from sklearn.metrics import mean_squared_error,mean_absolute_error
+from typing import Dict
+from sklearn.metrics import mean_absolute_error
 import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
-from EEGNet import EEGNet
-from dataset import EEGDataset
-from main.backup.cstm import CNN_LSTM
 
 device = torch.device("cuda" if torch.cuda.is_available() else
                           "mps" if torch.backends.mps.is_available() else
@@ -46,12 +40,12 @@ def plot_metrics(history):
     plt.ylabel('MAE')
     plt.legend()
 
-    # RMSE
+    # RMAE
     plt.subplot(2, 2, 4)
-    plt.plot(epochs, history['val_rmse'], label='Val RMSE', color='red')
-    plt.title('Validation RMSE')
+    plt.plot(epochs, history['val_rmae'], label='Val RMAE', color='red')
+    plt.title('Validation RMAE')
     plt.xlabel('Epoch')
-    plt.ylabel('RMSE')
+    plt.ylabel('RMAE')
     plt.legend()
 
     plt.tight_layout()
@@ -61,7 +55,7 @@ def plot_test_metrics(test_metrics: Dict[str, float]):
     values = list(test_metrics.values())
 
     plt.figure(figsize=(8, 5))
-    bars = plt.bar(labels, values, color=['skyblue', 'lightgreen', 'orange', 'salmon', 'red'])
+    bars = plt.bar(labels, values, color=['skyblue', 'lightgreen', 'orange', 'salmon'])
     plt.title("Test Set Metrics")
     plt.ylabel("Score")
     plt.ylim(0, max(values) * 1.2)
@@ -120,11 +114,10 @@ def evaluate(model, val_loader, criterion, device):
 
     epoch_loss = val_loss / total
     epoch_acc = correct / total
-    mse = mean_squared_error(all_targets, all_preds)
     mae = mean_absolute_error(all_targets, all_preds)
-    rmse = math.sqrt(mse)
+    rmae = math.sqrt(mae)
 
-    return epoch_loss, epoch_acc, mae,mse, rmse
+    return epoch_loss, epoch_acc, mae, rmae
 def train_model(epochs, batch_size, model, train_loader, val_loader, patience=5):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
@@ -137,26 +130,24 @@ def train_model(epochs, batch_size, model, train_loader, val_loader, patience=5)
         'train_loss': [],
         'val_loss': [],
         'val_acc': [],
-        'val_mae':[],
-        'val_mse': [],
-        'val_rmse': []
+        'val_mae': [],
+        'val_rmae': []
     }
 
     for epoch in range(epochs):
         train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
-        val_loss, val_acc,val_mae, val_mse, val_rmse = evaluate(model, val_loader, criterion, device)
+        val_loss, val_acc, val_mae, val_rmae = evaluate(model, val_loader, criterion, device)
 
         # Log values
         history['train_loss'].append(train_loss)
         history['val_loss'].append(val_loss)
         history['val_acc'].append(val_acc)
         history['val_mae'].append(val_mae)
-        history['val_mse'].append(val_mse)
-        history['val_rmse'].append(val_rmse)
+        history['val_rmae'].append(val_rmae)
 
         print(f"Epoch {epoch+1}/{epochs}")
         print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
-        print(f"  Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f} | MAE: {val_mae:.4f}| MSE: {val_mse:.4f} | RMSE: {val_rmse:.4f}")
+        print(f"  Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.4f} | MAE: {val_mae:.4f} | RMAE: {val_rmae:.4f}")
 
         # Early stopping
         if val_loss < best_val_loss:
@@ -177,72 +168,14 @@ def train_model(epochs, batch_size, model, train_loader, val_loader, patience=5)
     return history
 
 def test_model(model, test_loader, criterion, device):
-    test_loss, test_acc,test_mae, test_mse, test_rmse = evaluate(model, test_loader, criterion, device)
+    test_loss, test_acc, test_mae, test_rmae = evaluate(model, test_loader, criterion, device)
 
-    print(f"\nTest Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
-    print(f"Test MAE: {test_mae:.4f} |Test MSE: {test_mse:.4f} | Test RMSE: {test_rmse:.4f}")
+    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
+    print(f"Test MAE: {test_mae:.4f} | Test RMAE: {test_rmae:.4f}")
 
     return {
         'Test Loss': test_loss,
         'Test Accuracy': test_acc,
         'Test MAE': test_mae,
-        'Test MSE': test_mse,
-        'Test RMSE': test_rmse
+        'Test RMAE': test_rmae
     }
-
-def get_loaders(epoch: int = 32, batch_size: int = 64, sfreq: int = 128) -> Tuple[DataLoader, DataLoader, DataLoader]:
-
-    dataset = EEGDataset(data_dir=base_path, sfreq=sfreq, duration=1.0)
-
-    # Step 1: Create indices for the full dataset
-    total_size = len(dataset)
-    indices = np.arange(total_size)
-    labels = np.array([dataset[i][1] for i in range(len(dataset))])  # if label is at index 1
-    # Step 2: Split into Train and Temp (temp will be split into val and test)
-    train_idx, temp_idx = train_test_split(indices, test_size=0.3, random_state=42, stratify=labels)
-    # Step 3: Split Temp into Validation and Test
-    val_idx, test_idx = train_test_split(temp_idx, test_size=0.5, random_state=42, stratify=labels[temp_idx])
-
-    # Step 4: Create subsets
-    train_data = Subset(dataset, train_idx)
-    val_data = Subset(dataset, val_idx)
-    test_data = Subset(dataset, test_idx)
-
-    # Step 5: Create DataLoaders
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-
-    return train_loader, val_loader, test_loader
-
-
-def run_eegnet():
-    sfreq = 128
-    model = EEGNet(num_classes=3, sfreq=sfreq).to(device)
-    epochs = 32
-    batch_size = 64
-    train_loader, val_loader, test_loader = get_loaders(epoch=epochs, batch_size=batch_size, sfreq=sfreq)
-
-    history = train_model(epochs, batch_size, model, train_loader, val_loader)
-    plot_metrics(history)  # 👈 add this line
-
-    torch.save(model.state_dict(), 'eegnet.pth')
-    # model.load_state_dict(torch.load('eegnet.pth'))
-    test_metrics = test_model(model, test_loader, nn.CrossEntropyLoss(), device)
-    plot_test_metrics(test_metrics)
-def run_cstm():
-    sfreq=128
-    model = CNN_LSTM(input_size=64, hidden_size=128, num_layers=2, num_classes=3).to(device)
-    batch_size = 64
-    epochs = 32
-    train_loader, val_loader, test_loader = get_loaders(epoch=epochs, batch_size=batch_size, sfreq=sfreq)
-
-    history = train_model(epochs, batch_size, model, train_loader, val_loader)
-    plot_metrics(history)  # 👈 add this line
-
-    torch.save(model.state_dict(), 'eegnet.pth')
-    # model.load_state_dict(torch.load('eegnet.pth'))
-    test_metrics = test_model(model, test_loader, nn.CrossEntropyLoss(), device)
-    plot_test_metrics(test_metrics)
-if __name__ == '__main__':
-    run_cstm()
